@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import numpy.linalg as npl
 from matplotlib import pyplot as plt
@@ -94,7 +96,7 @@ def create_meshgrid(depth_map, z_axis_resolution=128):
     if np.max(depth_map) != z_axis_resolution and np.min(depth_map) != 0:
         # Note: depth_map should be read using "cv2.imread('.', cv2.IMREAD_ANYDEPTH)"
         depth_map = np.array(depth_map / np.max(depth_map) * z_axis_resolution, dtype='uint8')
-        depth_map = z_axis_resolution - depth_map   # Convert disparity map to depth map
+        depth_map = z_axis_resolution - depth_map  # Convert disparity map to depth map
     x = np.arange(0, depth_map.shape[1])
     y = np.arange(0, depth_map.shape[0])
     z = np.arange(0, z_axis_resolution)
@@ -109,15 +111,24 @@ def create_meshgrid(depth_map, z_axis_resolution=128):
 # (x_point, y_point, z_point): Origin of the light
 # (xx, yy, zz): Sparse meshgrid
 def unit_direction_3d(x_point, y_point, z_point, xx, yy, zz):
+    t0 = time.perf_counter()
     point_origin = np.array([x_point, y_point, z_point])
     points_mesh = np.array([xx, yy, zz])
     magnitude = np.linalg.norm(points_mesh - point_origin)
+    t1 = time.perf_counter()
+    print(f"Time to calculate magnitudes = {t1 - t0}")
+    t0 = time.perf_counter()
     directions_meshgrids = (points_mesh - point_origin)
     direction_x = np.ones_like(magnitude) * directions_meshgrids[0]
     direction_y = np.ones_like(magnitude) * directions_meshgrids[1]
     direction_z = np.ones_like(magnitude) * directions_meshgrids[2]
     direction_vectors = np.stack((direction_x, direction_y, direction_z), axis=-1)
+    t1 = time.perf_counter()
+    print(f"Time to stack direction vectors = {t1 - t0}")
+    t0 = time.perf_counter()
     unit_direction_vectors = direction_vectors / magnitude[..., np.newaxis]
+    t1 = time.perf_counter()
+    print(f"Time to make direction vectors unit length = {t1 - t0}")
     return unit_direction_vectors, magnitude
 
 
@@ -130,6 +141,7 @@ def unit_direction_3d(x_point, y_point, z_point, xx, yy, zz):
 def get_surface_lighting(image, depth, light_vector_field, light_vector_magnitude, spotlight_radius=0):
     def cast_shadows(lvf, lvm):
         pass
+
     num_rows, num_cols, _ = image.shape
     surface_light_directions = np.zeros_like(image, dtype=float)
     for i in range(num_rows):
@@ -137,15 +149,28 @@ def get_surface_lighting(image, depth, light_vector_field, light_vector_magnitud
             d = depth[i, j] - 1
             m = light_vector_magnitude[i, j, d]
             # Adjust c1 and c2 to control attenuation, f: 1 / 1.0 + c1*m + c2*m^2
-            attenuation = np.clip(1 / 1.0 + 0 * m + 0.0004 * m**2, 0, 1)
+            attenuation = 1.0 / 1.0 + 0.00005 * m + 0 * m ** 2
             surface_light_directions[i, j] = light_vector_field[i, j, d] * attenuation
     return surface_light_directions
 
 
-def apply_surface_lighting(light_vectors, magnitudes, normals, albedo, intensity=10, light_colour=None):
+def get_surface_lighting_vectorized(image, depth, light_vector_field, light_vector_magnitude, spotlight_radius=0):
+    def cast_shadows(lvf, lvm):
+        pass
+
+    num_rows, num_cols, _ = image.shape
+    row_idxs = np.arange(num_rows)[:, None]
+    col_idxs = np.arange(num_cols)[None, :]
+    depth_vals = depth - 1
+    light_mags = light_vector_magnitude[row_idxs, col_idxs, depth_vals]
+    attenuation = 1.0 / 1.0 + 0.00005 * light_mags
+    surface_light_directions = light_vector_field[row_idxs[:, None], col_idxs[None, :], depth_vals] * attenuation[..., None]
+    return surface_light_directions
+
+
+def apply_surface_lighting(light_vectors, magnitudes, normals, albedo, intensity=5, light_colour=None):
     if light_colour is None:
         light_colour = [1, 1, 1]
-    #light_vectors = (light_vectors + 1) / 2
     light_direction_times_normals = light_vectors * normals
     new_shading = np.sum(light_direction_times_normals, axis=2) / 3
     new_shading = np.dstack([new_shading, new_shading, new_shading]) * light_colour
