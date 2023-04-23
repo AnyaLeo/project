@@ -139,9 +139,6 @@ def unit_direction_3d(x_point, y_point, z_point, xx, yy, zz):
 # light_vector_field: Dense 3D light vector field (from unit_direction_3D)
 # light_vector_magnitude: Distance of each light_vector from the light source (from unit_direction_3D)
 def get_surface_lighting(image, depth, light_vector_field, light_vector_magnitude, spotlight_radius=0):
-    def cast_shadows(lvf, lvm):
-        pass
-
     num_rows, num_cols, _ = image.shape
     surface_light_directions = np.zeros_like(image, dtype=float)
     for i in range(num_rows):
@@ -168,7 +165,7 @@ def get_surface_lighting_vectorized(image, depth, light_vector_field, light_vect
     return surface_light_directions
 
 
-def apply_surface_lighting(light_vectors, magnitudes, normals, albedo, intensity=5, light_colour=None):
+def apply_surface_lighting(light_vectors, magnitudes, normals, albedo, intensity=20, light_colour=None):
     if light_colour is None:
         light_colour = [1, 1, 1]
     light_direction_times_normals = light_vectors * normals
