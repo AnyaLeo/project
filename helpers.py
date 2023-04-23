@@ -31,8 +31,10 @@ def get_new_light_dir(light_dir, original_image):
 #
 # light_dir: a 2d image that encodes a light direction within its RGB components, must be the same dimension as the image
 # path: the folder path to where the image components (like normals and albedo) are stored
-def get_shading(light_dir, path):
-    shading_original = plt.imread('./data/church/ours_shd.png')
+def get_shading(light_dir, path, light_colour=None):
+    if light_colour is None:
+        light_colour = [1, 1, 1]
+    shading_original = plt.imread(path + 'ours_shd.png')
 
     # Read and normalize the normals
     normals = plt.imread(path + 'normals.png')
@@ -48,7 +50,7 @@ def get_shading(light_dir, path):
     mask = np.all(normals_for_mask == [0, 0, 0], axis=2)
 
     new_shading[mask] = shading_original[mask]
-    new_shading = np.dstack([new_shading, new_shading, new_shading])
+    new_shading = np.dstack([new_shading, new_shading, new_shading]) * light_colour
 
     return new_shading
 
@@ -65,12 +67,12 @@ def combine_shading(shading_list, multiplier_list):
         print("Error in combine_shading(..): shading list and multiplier list have different sizes")
         return
 
-    total_multipliers = sum(multiplier_list)
+    #total_multipliers = sum(multiplier_list) 
 
     new_shading = np.zeros(np.shape(shading_list[0]));
     for i in range(len(shading_list)):
         new_shading += (shading_list[i] * multiplier_list[i])
-    new_shading = new_shading / total_multipliers
+    new_shading = new_shading #/ total_multipliers
 
     return new_shading
 
@@ -81,7 +83,7 @@ def combine_shading(shading_list, multiplier_list):
 # path: the folder path to where the image components (like normals and albedo) are stored
 def get_image(shading, path):
     albedo = plt.imread(path + 'ours_alb.png')
-    new_image = albedo * shading
+    new_image = albedo * shading * 3
     new_image = new_image ** 0.4545  # gamma correct
     new_image = np.nan_to_num(new_image)  # get rid of nan values to get rid of blurriness where NaNs are
 
@@ -171,5 +173,6 @@ def apply_surface_lighting(light_vectors, magnitudes, normals, albedo, intensity
     light_direction_times_normals = light_vectors * normals
     new_shading = np.sum(light_direction_times_normals, axis=2) / 3
     new_shading = np.dstack([new_shading, new_shading, new_shading]) * light_colour
-    new_image = albedo * new_shading * intensity
-    return new_image
+    #new_image = albedo * new_shading * intensity
+    #return new_image
+    return new_shading
